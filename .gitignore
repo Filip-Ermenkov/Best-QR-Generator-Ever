@@ -1,0 +1,46 @@
+# --- Frontend (Next.js) ---
+# We remove the leading / so it finds node_modules inside the frontend folder
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/build/
+frontend/.vercel
+frontend/*.tsbuildinfo
+frontend/next-env.d.ts
+
+# --- Backend (Python/FastAPI) ---
+backend/__pycache__/
+backend/venv/
+backend/.venv/
+backend/*.py[cod]
+backend/.pytest_cache/
+
+# --- Dependencies & Package Managers ---
+.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# --- Testing & Logs ---
+coverage/
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+.pnpm-debug.log*
+
+# --- Environment & Security (Crucial) ---
+# This ignores .env in the root and any nested folders
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env*
+*.pem
+
+# --- OS Misc ---
+.DS_Store
+Thumbs.db

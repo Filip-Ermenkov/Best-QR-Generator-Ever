@@ -1,0 +1,6 @@
+fastapi
+uvicorn
+qrcode[pil]
+boto3
+python-multipart
+python-dotenv
