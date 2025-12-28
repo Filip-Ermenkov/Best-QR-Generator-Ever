@@ -1,0 +1,29 @@
+services:
+  backend:
+    build: ./backend
+    container_name: qr-backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    restart: always
+    networks:
+      - qr-network
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        - NEXT_PUBLIC_API_URL=http://localhost:8000
+    container_name: qr-frontend
+    ports:
+      - "3000:3000"
+    restart: always
+    depends_on:
+      - backend
+    networks:
+      - qr-network
+
+networks:
+  qr-network:
+    driver: bridge
