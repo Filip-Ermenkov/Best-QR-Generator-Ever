@@ -1,26 +1,36 @@
 services:
   backend:
-    build: ./backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
     container_name: qr-backend
-    ports:
-      - "8000:8000"
+    restart: always
     env_file:
       - .env
-    restart: always
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
     networks:
       - qr-network
 
   frontend:
     build:
       context: ./frontend
+      dockerfile: Dockerfile
       args:
-        - NEXT_PUBLIC_API_URL=http://localhost:8000
+        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
     container_name: qr-frontend
+    restart: always
     ports:
       - "3000:3000"
-    restart: always
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     networks:
       - qr-network
 
