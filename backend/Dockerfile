@@ -1,15 +1,30 @@
-FROM python:3.10-slim
-
-RUN addgroup --system appgroup && adduser --system --group appuser
+FROM python:3.12-slim AS builder
 
 WORKDIR /app
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+
+FROM python:3.12-slim
+
+WORKDIR /app
+
+RUN groupadd -r pythonuser && useradd -r -g pythonuser pythonuser
+
+COPY --from=builder /install /usr/local
 COPY . .
 
-USER appuser
+RUN chown -R pythonuser:pythonuser /app
+
+USER pythonuser
 
 EXPOSE 8000
 
