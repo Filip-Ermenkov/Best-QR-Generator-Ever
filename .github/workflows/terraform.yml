@@ -11,6 +11,16 @@ on:
     paths:
       - 'terraform/**'
       - .github/workflows/terraform.yml
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Terraform Action to perform'
+        required: true
+        default: 'apply'
+        type: choice
+        options:
+          - apply
+          - destroy
 
 permissions:
   id-token: write
@@ -18,7 +28,7 @@ permissions:
 
 jobs:
   terraform:
-    name: "Terraform Plan & Apply"
+    name: "Terraform Execution"
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -37,7 +47,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: "1.14.3"
+          terraform_version: "1.9.0"
 
       - name: Terraform Init
         run: terraform init
@@ -47,10 +57,22 @@ jobs:
 
       - name: Terraform Plan
         id: plan
+        if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.action == 'apply') || github.event_name == 'push'
         run: terraform plan -no-color
-        continue-on-error: true
 
       - name: Terraform Apply
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        if: (github.ref == 'refs/heads/main' && github.event_name == 'push') || (github.event_name == 'workflow_dispatch' && inputs.action == 'apply')
+        run: terraform apply -auto-approve
+
+      - name: Kubernetes Cleanup (Pre-Destroy)
+        if: github.event_name == 'workflow_dispatch' && inputs.action == 'destroy'
+        run: |
+          # Get cluster name from terraform output or variable
+          CLUSTER_NAME=$(terraform output -raw cluster_name)
+          aws eks update-kubeconfig --region us-east-1 --name $CLUSTER_NAME
+          kubectl delete service --all --all-namespaces || true
+        continue-on-error: true
+
+      - name: Terraform Destroy
+        if: github.event_name == 'workflow_dispatch' && inputs.action == 'destroy'
         run: terraform destroy -auto-approve
-        # run: terraform apply -auto-approve
