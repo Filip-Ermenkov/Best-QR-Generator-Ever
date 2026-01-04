@@ -40,7 +40,7 @@ resource "aws_eks_node_group" "main" {
   }
 
   instance_types = ["t3.medium"]
-  ami_type       = "AL2023_x86_64_Standard"
+  ami_type       = "AL2023_x86_64_STANDARD"
 
   update_config {
     max_unavailable = 1
