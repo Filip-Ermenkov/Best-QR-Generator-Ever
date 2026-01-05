@@ -1,3 +1,7 @@
+locals {
+  sso_role_arn_cleaned = replace(var.sso_admin_role_arn, "/aws-reserved/sso.amazonaws.com/eu-north-1/", "")
+}
+
 resource "aws_cloudwatch_log_group" "eks" {
   name              = "/aws/eks/${var.project_name}/cluster"
   retention_in_days = 7
@@ -58,4 +62,21 @@ resource "aws_eks_addon" "pod_identity" {
   addon_name   = "eks-pod-identity-agent"
 
   depends_on = [aws_eks_node_group.main]
+}
+
+resource "aws_eks_access_entry" "sso_admin" {
+  cluster_name      = aws_eks_cluster.main.name
+  principal_arn     = local.sso_role_arn_cleaned
+  kubernetes_groups = ["system:masters"]
+  type              = "STANDARD"
+}
+
+resource "aws_eks_access_policy_association" "sso_admin_policy" {
+  cluster_name  = aws_eks_cluster.main.name
+  policy_arn    = "arn:aws:iam::aws:policy/AmazonEKSClusterAdminPolicy"
+  principal_arn = local.sso_role_arn_cleaned
+
+  access_scope {
+    type = "cluster"
+  }
 }
