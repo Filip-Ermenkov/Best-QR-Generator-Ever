@@ -67,13 +67,12 @@ resource "aws_eks_addon" "pod_identity" {
 resource "aws_eks_access_entry" "sso_admin" {
   cluster_name      = aws_eks_cluster.main.name
   principal_arn     = local.sso_role_arn_cleaned
-  kubernetes_groups = ["system:masters"]
   type              = "STANDARD"
 }
 
 resource "aws_eks_access_policy_association" "sso_admin_policy" {
   cluster_name  = aws_eks_cluster.main.name
-  policy_arn    = "arn:aws:iam::aws:policy/AmazonEKSClusterAdminPolicy"
+  policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
   principal_arn = local.sso_role_arn_cleaned
 
   access_scope {
