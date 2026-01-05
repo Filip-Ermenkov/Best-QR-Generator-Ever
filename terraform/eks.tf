@@ -1,8 +1,3 @@
-locals {
-  parts                = split("/", var.sso_admin_role_arn)
-  sso_role_arn_cleaned = "${local.parts[0]}/${element(local.parts, length(local.parts) - 1)}"
-}
-
 resource "aws_cloudwatch_log_group" "eks" {
   name              = "/aws/eks/${var.project_name}/cluster"
   retention_in_days = 7
@@ -67,14 +62,14 @@ resource "aws_eks_addon" "pod_identity" {
 
 resource "aws_eks_access_entry" "sso_admin" {
   cluster_name  = aws_eks_cluster.main.name
-  principal_arn = local.sso_role_arn_cleaned
+  principal_arn = var.sso_admin_role_arn
   type          = "STANDARD"
 }
 
 resource "aws_eks_access_policy_association" "sso_admin_policy" {
   cluster_name  = aws_eks_cluster.main.name
   policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
-  principal_arn = local.sso_role_arn_cleaned
+  principal_arn = var.sso_admin_role_arn
 
   access_scope {
     type = "cluster"
