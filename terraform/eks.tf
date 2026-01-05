@@ -65,9 +65,9 @@ resource "aws_eks_addon" "pod_identity" {
 }
 
 resource "aws_eks_access_entry" "sso_admin" {
-  cluster_name      = aws_eks_cluster.main.name
-  principal_arn     = local.sso_role_arn_cleaned
-  type              = "STANDARD"
+  cluster_name  = aws_eks_cluster.main.name
+  principal_arn = local.sso_role_arn_cleaned
+  type          = "STANDARD"
 }
 
 resource "aws_eks_access_policy_association" "sso_admin_policy" {
