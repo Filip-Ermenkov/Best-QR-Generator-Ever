@@ -1,5 +1,5 @@
 locals {
-  parts = split("/", var.sso_admin_role_arn)
+  parts                = split("/", var.sso_admin_role_arn)
   sso_role_arn_cleaned = "${local.parts[0]}/${element(local.parts, length(local.parts) - 1)}"
 }
 
