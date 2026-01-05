@@ -1,5 +1,6 @@
 locals {
-  sso_role_arn_cleaned = replace(var.sso_admin_role_arn, "/aws-reserved/sso.amazonaws.com/eu-north-1/", "")
+  parts = split("/", var.sso_admin_role_arn)
+  sso_role_arn_cleaned = "${local.parts[0]}/${element(local.parts, length(local.parts) - 1)}"
 }
 
 resource "aws_cloudwatch_log_group" "eks" {
