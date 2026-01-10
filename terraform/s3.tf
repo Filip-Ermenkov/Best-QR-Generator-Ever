@@ -36,6 +36,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "qr_codes" {
     id     = "archive-old-qrs"
     status = "Enabled"
 
+    filter {}
+
     transition {
       days          = 30
       storage_class = "INTELLIGENT_TIERING"

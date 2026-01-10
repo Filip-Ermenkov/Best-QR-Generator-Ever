@@ -3,7 +3,7 @@ locals {
 }
 
 resource "aws_ecr_repository" "app_repos" {
-  for_each = toset(locals.repos)
+  for_each = toset(local.repos)
 
   name                 = "${var.project_name}-${each.key}"
   image_tag_mutability = "IMMUTABLE"

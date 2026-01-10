@@ -1,11 +1,11 @@
 output "frontend_ecr_url" {
   description = "The URL of the Frontend ECR repository"
-  value       = aws_ecr_repository.frontend.repository_url
+  value       = aws_ecr_repository.app_repos["frontend"].repository_url
 }
 
 output "backend_ecr_url" {
   description = "The URL of the API/Backend ECR repository"
-  value       = aws_ecr_repository.backend.repository_url
+  value       = aws_ecr_repository.app_repos["backend"].repository_url
 }
 
 output "cluster_name" {
