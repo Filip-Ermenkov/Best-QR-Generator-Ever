@@ -100,7 +100,7 @@ jobs:
         run: |
           CLUSTER_NAME=$(terraform output -raw cluster_name || echo "none")
           if [ "$CLUSTER_NAME" != "none" ]; then
-            aws eks update-kubeconfig --region ${{ vars.AWS_REGION }} --name $CLUSTER_NAME
+            aws eks update-kubeconfig --region us-east-1 --name $CLUSTER_NAME
             echo "Removing Load Balancers to prevent VPC dependency locks..."
             kubectl delete ingress --all --all-namespaces --timeout=60s || true
             kubectl delete service --all --all-namespaces --timeout=60s || true
