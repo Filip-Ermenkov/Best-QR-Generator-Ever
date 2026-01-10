@@ -53,14 +53,15 @@ jobs:
       - name: Terraform Init
         run: terraform init
 
-      - name: Terraform Format Check
-        run: terraform fmt -check
+      - name: Terraform Format & Validate
+        run: |
+          terraform fmt -check
+          terraform validate
 
       - name: Terraform Plan
         id: plan
-        if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.action == 'apply') || github.event_name == 'push'
+        if: github.event_name == 'pull_request' || github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.action == 'apply')
         run: terraform plan -no-color -out=tfplan
-        continue-on-error: true
 
       - name: Update Pull Request with Plan
         uses: actions/github-script@v7
@@ -97,16 +98,13 @@ jobs:
       - name: Kubernetes Cleanup (Pre-Destroy)
         if: github.event_name == 'workflow_dispatch' && inputs.action == 'destroy'
         run: |
-          CLUSTER_NAME=$(terraform output -raw cluster_name)
-          aws eks update-kubeconfig --region us-east-1 --name $CLUSTER_NAME
-
-          echo "Cleaning up Kubernetes-managed AWS resources to allow VPC deletion..."
-          kubectl delete ingress --all --all-namespaces || true
-          kubectl delete service --all --all-namespaces || true
-          kubectl delete pvc --all --all-namespaces || true
-
-          sleep 30
-        continue-on-error: true
+          CLUSTER_NAME=$(terraform output -raw cluster_name || echo "none")
+          if [ "$CLUSTER_NAME" != "none" ]; then
+            aws eks update-kubeconfig --region ${{ vars.AWS_REGION }} --name $CLUSTER_NAME
+            echo "Removing Load Balancers to prevent VPC dependency locks..."
+            kubectl delete ingress --all --all-namespaces --timeout=60s || true
+            kubectl delete service --all --all-namespaces --timeout=60s || true
+          fi
 
       - name: Terraform Destroy
         if: github.event_name == 'workflow_dispatch' && inputs.action == 'destroy'

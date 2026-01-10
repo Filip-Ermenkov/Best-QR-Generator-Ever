@@ -28,3 +28,53 @@ resource "aws_s3_bucket_versioning" "qr_codes" {
     status = "Enabled"
   }
 }
+
+resource "aws_s3_bucket_lifecycle_configuration" "qr_codes" {
+  bucket = aws_s3_bucket.qr_codes.id
+
+  rule {
+    id     = "archive-old-qrs"
+    status = "Enabled"
+
+    transition {
+      days          = 30
+      storage_class = "INTELLIGENT_TIERING"
+    }
+
+    expiration {
+      days = 90
+    }
+  }
+}
+
+resource "aws_s3_bucket_policy" "force_ssl" {
+  bucket = aws_s3_bucket.qr_codes.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "AllowSSLRequestsOnly"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = "s3:*"
+        Resource = [
+          aws_s3_bucket.qr_codes.arn,
+          "${aws_s3_bucket.qr_codes.arn}/*"
+        ]
+        Condition = {
+          Bool = {
+            "aws:SecureTransport" = "false"
+          }
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_s3_bucket_ownership_controls" "qr_codes" {
+  bucket = aws_s3_bucket.qr_codes.id
+  rule {
+    object_ownership = "BucketOwnerEnforced"
+  }
+}
