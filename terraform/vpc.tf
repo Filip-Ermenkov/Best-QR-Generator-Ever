@@ -15,8 +15,6 @@ module "vpc" {
   enable_nat_gateway = true
   single_nat_gateway = true
 
-  enable_s3_endpoint = true
-
   tags = {
     "kubernetes.io/cluster/${var.project_name}" = "shared"
   }
@@ -29,5 +27,17 @@ module "vpc" {
   private_subnet_tags = {
     "kubernetes.io/cluster/${var.project_name}" = "shared"
     "kubernetes.io/role/internal-elb"           = "1"
+  }
+}
+
+data "aws_region" "current" {}
+
+resource "aws_vpc_endpoint" "s3" {
+  vpc_id          = module.vpc.vpc_id
+  service_name    = "com.amazonaws.${data.aws_region.current.name}.s3"
+  route_table_ids = concat(module.vpc.private_route_table_ids, module.vpc.public_route_table_ids)
+
+  tags = {
+    Name = "${var.project_name}-s3-endpoint"
   }
 }
