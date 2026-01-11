@@ -70,8 +70,8 @@ resource "aws_iam_role" "alb_controller" {
         }
       },
       {
-        Action = ["sts:AssumeRole", "sts:TagSession"]
-        Effect = "Allow"
+        Action    = ["sts:AssumeRole", "sts:TagSession"]
+        Effect    = "Allow"
         Principal = { Service = "pods.eks.amazonaws.com" }
       }
     ]
