@@ -19,27 +19,31 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class Settings(BaseModel):
-    aws_access_key_id: str
-    aws_secret_access_key: str
-    aws_region: str
-    s3_bucket_name: str
+    aws_access_key_id: str | None = None
+    aws_secret_access_key: str | None = None
+    aws_region: str = "us-east-1"
+    s3_bucket_name: str = "best-qr-ever-generated-codes"
 
 @lru_cache()
 def get_settings():
     return Settings(
-        aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID", ""),
-        aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY", ""),
+        aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+        aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
         aws_region=os.getenv("AWS_REGION", "us-east-1"),
-        s3_bucket_name=os.getenv("S3_BUCKET_NAME", "")
+        s3_bucket_name=os.getenv("S3_BUCKET_NAME", "best-qr-ever-generated-codes")
     )
 
 def get_s3_client(settings: Annotated[Settings, Depends(get_settings)]):
-    return boto3.client(
-        's3',
-        aws_access_key_id=settings.aws_access_key_id,
-        aws_secret_access_key=settings.aws_secret_access_key,
-        region_name=settings.aws_region
-    )
+    client_kwargs = {'region_name': settings.aws_region}
+
+    if settings.aws_access_key_id and settings.aws_secret_access_key:
+        client_kwargs['aws_access_key_id'] = settings.aws_access_key_id
+        client_kwargs['aws_secret_access_key'] = settings.aws_secret_access_key
+        logger.info("Using Static AWS Credentials (Local/Manual)")
+    else:
+        logger.info("Using IAM Role / Pod Identity (Cloud Native)")
+        
+    return boto3.client('s3', **client_kwargs)
 
 app = FastAPI(title="QR Generator API")
 
