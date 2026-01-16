@@ -7,6 +7,7 @@ resource "aws_ecr_repository" "app_repos" {
 
   name                 = "${var.project_name}-${each.key}"
   image_tag_mutability = "IMMUTABLE"
+  force_destroy        = true
 
   encryption_configuration {
     encryption_type = "AES256"

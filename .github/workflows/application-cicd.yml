@@ -1,16 +1,24 @@
-name: "Terraform Infrastructure"
+name: "Bring Up/Down App"
 
 on:
   push:
     branches:
       - main
     paths:
+      - 'backend/**'
+      - 'frontend/**'
+      - 'k8s/**'
       - 'terraform/**'
       - .github/workflows/terraform.yml
   pull_request:
     paths:
+      - 'backend/**'
+      - 'frontend/**'
+      - 'k8s/**'
       - 'terraform/**'
       - .github/workflows/terraform.yml
+    branches: 
+      - main
   workflow_dispatch:
     inputs:
       action:
@@ -22,6 +30,11 @@ on:
           - apply
           - destroy
 
+env:
+  PROJECT_NAME: "best-qr-ever"
+  CLUSTER_NAME: "qr-generator-cluster" 
+  AWS_REGION: "us-east-1"
+
 permissions:
   id-token: write
   contents: read
@@ -29,12 +42,14 @@ permissions:
 
 jobs:
   terraform:
-    name: "Terraform Execution"
+    name: "Infrastructure"
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: ./terraform
-
+    outputs:
+      tf_outcome: ${{ steps.apply.outcome }}
+    
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -43,7 +58,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::176971015975:role/GitHub_Actions_Resources_Deployment
-          aws-region: us-east-1
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -77,7 +92,7 @@ jobs:
             \`\`\`${process.env.PLAN}\`\`\`
 
             </details>
-            
+
             *Pusher: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
 
             github.rest.issues.createComment({
@@ -109,3 +124,64 @@ jobs:
       - name: Terraform Destroy
         if: github.event_name == 'workflow_dispatch' && inputs.action == 'destroy'
         run: terraform destroy -auto-approve
+
+  deploy:
+    name: "App Deployment"
+    needs: terraform
+    runs-on: ubuntu-latest
+    if: |
+      always() && 
+      github.event.inputs.action != 'destroy' && 
+      (needs.terraform.result == 'success' || needs.terraform.result == 'skipped')
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::176971015975:role/GitHub_Actions_Resources_Deployment
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and Push Docker Images
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/${{ env.PROJECT_NAME }}-backend:$IMAGE_TAG ./backend
+          docker push $ECR_REGISTRY/${{ env.PROJECT_NAME }}-backend:$IMAGE_TAG
+          docker build -t $ECR_REGISTRY/${{ env.PROJECT_NAME }}-frontend:$IMAGE_TAG ./frontend
+          docker push $ECR_REGISTRY/${{ env.PROJECT_NAME }}-frontend:$IMAGE_TAG
+          echo "BACKEND_IMAGE=$ECR_REGISTRY/${{ env.PROJECT_NAME }}-backend:$IMAGE_TAG" >> $GITHUB_ENV
+          echo "FRONTEND_IMAGE=$ECR_REGISTRY/${{ env.PROJECT_NAME }}-frontend:$IMAGE_TAG" >> $GITHUB_ENV
+
+      - name: Setup Kubeconfig
+        run: aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.CLUSTER_NAME }}
+
+      - name: Deploy to Kubernetes
+        run: |
+          export BACKEND_IMAGE=${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-backend:${{ github.sha }}
+          export FRONTEND_IMAGE=${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-frontend:${{ github.sha }}
+
+          kubectl apply -f k8s/00-namespace.yml
+          kubectl apply -f k8s/config-env.yml
+          kubectl apply -f k8s/01-rbac.yml
+
+          envsubst < k8s/02-backend/deployment.yml | kubectl apply -f -
+          kubectl apply -f k8s/02-backend/service.yml
+
+          envsubst < k8s/03-frontend/deployment.yml | kubectl apply -f -
+          kubectl apply -f k8s/03-frontend/service.yml
+
+          kubectl apply -f k8s/04-monitoring/metrics-server.yml
+          kubectl apply -f k8s/04-monitoring/hpa.yml
+
+      - name: Verify Deployment
+        run: |
+          kubectl rollout status deployment/qr-backend -n qr-generator --timeout=120s
+          kubectl rollout status deployment/qr-frontend -n qr-generator --timeout=120s

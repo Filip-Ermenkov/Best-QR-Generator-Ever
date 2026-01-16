@@ -128,7 +128,7 @@ resource "aws_iam_role_policy_attachment" "backend_s3_attach" {
 
 resource "aws_eks_pod_identity_association" "backend_s3" {
   cluster_name    = aws_eks_cluster.main.name
-  namespace       = "default"
+  namespace       = "qr-generator"
   service_account = "backend-service-account"
   role_arn        = aws_iam_role.backend_pod_role.arn
 }

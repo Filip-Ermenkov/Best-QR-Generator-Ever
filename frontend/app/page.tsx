@@ -11,7 +11,7 @@ export default function Home() {
     e.preventDefault();
     setLoading(true);
 
-    const apiBase = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '') || 'http://localhost:8000';
+    const apiBase = '/api/proxy';
 
     try {
       const response = await fetch(`${apiBase}/generate-qr/`, {

@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: qr-config
+  namespace: qr-generator
+data:
+  S3_BUCKET_NAME: "best-qr-ever-generated-codes"
+  AWS_REGION: "us-east-1"
