@@ -9,7 +9,7 @@ spec:
     kind: Deployment
     name: qr-backend
   minReplicas: 2
-  maxReplicas: 5
+  maxReplicas: 12
   metrics:
   - type: Resource
     resource:
@@ -35,7 +35,7 @@ spec:
     kind: Deployment
     name: qr-frontend
   minReplicas: 2
-  maxReplicas: 5
+  maxReplicas: 4
   metrics:
   - type: Resource
     resource:
