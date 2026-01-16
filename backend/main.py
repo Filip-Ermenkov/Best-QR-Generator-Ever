@@ -61,7 +61,7 @@ class QRRequest(BaseModel):
 def health_check():
     return {"status": "ok"}
 
-@app.post("/generate-qr/")
+@app.post("/generate-qr")
 def generate_qr(
     request: QRRequest,
     s3_client = Depends(get_s3_client),

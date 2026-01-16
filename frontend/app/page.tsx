@@ -14,7 +14,7 @@ export default function Home() {
     const apiBase = '/api/proxy';
 
     try {
-      const response = await fetch(`${apiBase}/generate-qr/`, {
+      const response = await fetch(`${apiBase}/generate-qr`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url }),

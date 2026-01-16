@@ -19,8 +19,8 @@ spec:
         ports:
         - containerPort: 3000
         env:
-        - name: NEXT_PUBLIC_API_URL
-          value: "http://qr-backend:8000"
+        - name: API_URL
+          value: "http://qr-backend.qr-generator.svc.cluster.local:8000"
         resources:
           requests:
             cpu: "250m"
