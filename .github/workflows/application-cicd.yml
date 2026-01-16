@@ -47,6 +47,7 @@ jobs:
       run:
         working-directory: ./terraform
     outputs:
+      deployer_role_arn: ${{ steps.set-outputs.outputs.deployer_role_arn }}
       cluster_name: ${{ steps.set-outputs.outputs.cluster_name }}
       tf_outcome: ${{ steps.apply.outcome }}
     
@@ -113,7 +114,7 @@ jobs:
 
       - name: Export Terraform Outputs
         id: set-outputs
-        if: github.event.inputs.action != 'destroy'
+        if: steps.apply.outcome == 'success' || github.event.inputs.action != 'destroy'
         run: |
           echo "cluster_name=$(terraform output -raw cluster_name)" >> $GITHUB_OUTPUT
           echo "deployer_role_arn=$(terraform output -raw deployer_role_arn)" >> $GITHUB_OUTPUT
