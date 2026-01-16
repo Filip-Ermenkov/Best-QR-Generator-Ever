@@ -116,6 +116,7 @@ jobs:
         if: github.event.inputs.action != 'destroy'
         run: |
           echo "cluster_name=$(terraform output -raw cluster_name)" >> $GITHUB_OUTPUT
+          echo "deployer_role_arn=$(terraform output -raw deployer_role_arn)" >> $GITHUB_OUTPUT
 
       - name: Kubernetes Cleanup (Pre-Destroy)
         if: github.event_name == 'workflow_dispatch' && inputs.action == 'destroy'
@@ -141,6 +142,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CLUSTER_NAME: ${{ needs.terraform.outputs.cluster_name }}
+      DEPLOYER_ROLE_ARN: ${{ needs.terraform.outputs.deployer_role_arn }}
     if: |
       always() && 
       github.event.inputs.action != 'destroy' && 
@@ -153,7 +155,7 @@ jobs:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::176971015975:role/GitHub_Actions_Resources_Deployment
+          role-to-assume: ${{ env.DEPLOYER_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR

@@ -16,12 +16,6 @@ resource "aws_iam_role_policy_attachment" "eks_cluster_policy" {
   role       = aws_iam_role.eks_cluster.name
 }
 
-resource "aws_iam_openid_connect_provider" "eks" {
-  client_id_list  = ["sts.amazonaws.com"]
-  thumbprint_list = [data.tls_certificate.eks.certificates[0].sha1_fingerprint]
-  url             = aws_eks_cluster.main.identity[0].oidc[0].issuer
-}
-
 resource "aws_iam_role" "eks_nodes" {
   name = "${var.project_name}-eks-node-group-role"
 
@@ -32,11 +26,6 @@ resource "aws_iam_role" "eks_nodes" {
         Action    = "sts:AssumeRole"
         Effect    = "Allow"
         Principal = { Service = "ec2.amazonaws.com" }
-      },
-      {
-        Action    = ["sts:AssumeRole", "sts:TagSession"]
-        Effect    = "Allow"
-        Principal = { Service = "pods.eks.amazonaws.com" }
       }
     ]
   })
@@ -59,16 +48,6 @@ resource "aws_iam_role" "alb_controller" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
-      {
-        Action    = "sts:AssumeRoleWithWebIdentity"
-        Effect    = "Allow"
-        Principal = { Federated = aws_iam_openid_connect_provider.eks.arn }
-        Condition = {
-          StringEquals = {
-            "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:sub" = "system:serviceaccount:kube-system:aws-load-balancer-controller"
-          }
-        }
-      },
       {
         Action    = ["sts:AssumeRole", "sts:TagSession"]
         Effect    = "Allow"
@@ -133,6 +112,44 @@ resource "aws_eks_pod_identity_association" "backend_s3" {
   role_arn        = aws_iam_role.backend_pod_role.arn
 }
 
+resource "aws_iam_policy" "github_app_deploy_policy" {
+  name        = "${var.project_name}-github-deploy-policy"
+  description = "Scoped permissions for ECR push and EKS app deployment"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = "ecr:GetAuthorizationToken"
+        Resource = "*"
+      },
+      {
+        Effect   = "Allow"
+        Action   = [
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:InitiateLayerUpload",
+          "ecr:UploadLayerPart",
+          "ecr:CompleteLayerUpload",
+          "ecr:PutImage"
+        ]
+        Resource = [
+          aws_ecr_repository.app_repos["frontend"].arn,
+          aws_ecr_repository.app_repos["backend"].arn
+        ]
+      },
+      {
+        Effect   = "Allow"
+        Action   = [
+          "eks:DescribeCluster"
+        ]
+        Resource = [aws_eks_cluster.main.arn]
+      }
+    ]
+  })
+}
+
 resource "aws_iam_role" "github_actions_app_deployer" {
   name = "${var.project_name}-github-app-role"
 
@@ -153,7 +170,7 @@ resource "aws_iam_role" "github_actions_app_deployer" {
 }
 
 resource "aws_iam_role_policy_attachment" "github_app_deploy" {
-  policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
+  policy_arn = aws_iam_policy.github_app_deploy_policy.arn
   role       = aws_iam_role.github_actions_app_deployer.name
 }
 
