@@ -125,8 +125,8 @@ resource "aws_iam_policy" "github_app_deploy_policy" {
         Resource = "*"
       },
       {
-        Effect   = "Allow"
-        Action   = [
+        Effect = "Allow"
+        Action = [
           "ecr:BatchCheckLayerAvailability",
           "ecr:GetDownloadUrlForLayer",
           "ecr:InitiateLayerUpload",
@@ -140,8 +140,8 @@ resource "aws_iam_policy" "github_app_deploy_policy" {
         ]
       },
       {
-        Effect   = "Allow"
-        Action   = [
+        Effect = "Allow"
+        Action = [
           "eks:DescribeCluster"
         ]
         Resource = [aws_eks_cluster.main.arn]
