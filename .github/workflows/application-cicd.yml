@@ -9,15 +9,15 @@ on:
       - 'frontend/**'
       - 'k8s/**'
       - 'terraform/**'
-      - .github/workflows/terraform.yml
+      - .github/workflows/application-cicd.yml
   pull_request:
     paths:
       - 'backend/**'
       - 'frontend/**'
       - 'k8s/**'
       - 'terraform/**'
-      - .github/workflows/terraform.yml
-    branches: 
+      - .github/workflows/application-cicd.yml
+    branches:
       - main
   workflow_dispatch:
     inputs:
@@ -32,7 +32,6 @@ on:
 
 env:
   PROJECT_NAME: "best-qr-ever"
-  CLUSTER_NAME: "qr-generator-cluster" 
   AWS_REGION: "us-east-1"
 
 permissions:
@@ -48,6 +47,7 @@ jobs:
       run:
         working-directory: ./terraform
     outputs:
+      cluster_name: ${{ steps.set-outputs.outputs.cluster_name }}
       tf_outcome: ${{ steps.apply.outcome }}
     
     steps:
@@ -107,15 +107,22 @@ jobs:
         run: exit 1
 
       - name: Terraform Apply
+        id: apply
         if: (github.ref == 'refs/heads/main' && github.event_name == 'push') || (github.event_name == 'workflow_dispatch' && inputs.action == 'apply')
         run: terraform apply -auto-approve tfplan
+
+      - name: Export Terraform Outputs
+        id: set-outputs
+        if: always()
+        run: |
+          echo "cluster_name=$(terraform output -raw cluster_name)" >> $GITHUB_OUTPUT
 
       - name: Kubernetes Cleanup (Pre-Destroy)
         if: github.event_name == 'workflow_dispatch' && inputs.action == 'destroy'
         run: |
           CLUSTER_NAME=$(terraform output -raw cluster_name || echo "none")
           if [ "$CLUSTER_NAME" != "none" ]; then
-            aws eks update-kubeconfig --region us-east-1 --name $CLUSTER_NAME
+            aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name $CLUSTER_NAME
             echo "Removing Load Balancers to prevent VPC dependency locks..."
             kubectl delete ingress --all --all-namespaces --timeout=60s || true
             kubectl delete service --all --all-namespaces --timeout=60s || true
@@ -129,6 +136,8 @@ jobs:
     name: "App Deployment"
     needs: terraform
     runs-on: ubuntu-latest
+    env:
+      CLUSTER_NAME: ${{ needs.terraform.outputs.cluster_name }}
     if: |
       always() && 
       github.event.inputs.action != 'destroy' && 
