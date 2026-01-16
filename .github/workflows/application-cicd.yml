@@ -113,7 +113,7 @@ jobs:
 
       - name: Export Terraform Outputs
         id: set-outputs
-        if: always()
+        if: github.event.inputs.action != 'destroy'
         run: |
           echo "cluster_name=$(terraform output -raw cluster_name)" >> $GITHUB_OUTPUT
 
@@ -121,11 +121,14 @@ jobs:
         if: github.event_name == 'workflow_dispatch' && inputs.action == 'destroy'
         run: |
           CLUSTER_NAME=$(terraform output -raw cluster_name || echo "none")
-          if [ "$CLUSTER_NAME" != "none" ]; then
+          if [ "$CLUSTER_NAME" != "none" ] && [ "$CLUSTER_NAME" != "" ]; then
             aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name $CLUSTER_NAME
-            echo "Removing Load Balancers to prevent VPC dependency locks..."
-            kubectl delete ingress --all --all-namespaces --timeout=60s || true
-            kubectl delete service --all --all-namespaces --timeout=60s || true
+            echo "Deleting Kubernetes resources that create AWS dependencies..."
+            kubectl delete namespace qr-generator --timeout=180s || true
+            echo "Waiting 2 minutes for AWS Load Balancer and ENI cleanup..."
+            sleep 120
+          else
+            echo "Cluster not found or already gone. Proceeding to Terraform Destroy."
           fi
 
       - name: Terraform Destroy
