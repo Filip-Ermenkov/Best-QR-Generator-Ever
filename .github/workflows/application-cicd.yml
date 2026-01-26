@@ -50,6 +50,7 @@ jobs:
       deployer_role_arn: ${{ steps.set-outputs.outputs.deployer_role_arn }}
       cluster_name: ${{ steps.set-outputs.outputs.cluster_name }}
       tf_outcome: ${{ steps.apply.outcome }}
+      alb_security_group_id: ${{ steps.set-outputs.outputs.alb_security_group_id }}
     
     steps:
       - name: Checkout Code
@@ -118,6 +119,7 @@ jobs:
         run: |
           echo "cluster_name=$(terraform output -raw cluster_name)" >> $GITHUB_OUTPUT
           echo "deployer_role_arn=$(terraform output -raw deployer_role_arn)" >> $GITHUB_OUTPUT
+          echo "alb_security_group_id=$(terraform output -raw alb_security_group_id)" >> $GITHUB_OUTPUT
 
       - name: Kubernetes Cleanup (Pre-Destroy)
         if: github.event_name == 'workflow_dispatch' && inputs.action == 'destroy'
@@ -144,6 +146,7 @@ jobs:
     env:
       CLUSTER_NAME: ${{ needs.terraform.outputs.cluster_name }}
       DEPLOYER_ROLE_ARN: ${{ needs.terraform.outputs.deployer_role_arn }}
+      ALB_SECURITY_GROUP_ID: ${{ needs.terraform.outputs.alb_security_group_id }}
     if: |
       always() && 
       github.event.inputs.action != 'destroy' && 
@@ -197,6 +200,8 @@ jobs:
           envsubst < k8s/03-frontend/deployment.yml | kubectl apply -f -
           kubectl apply -f k8s/03-frontend/service.yml
 
+          envsubst < k8s/03-frontend/ingress.yml | kubectl apply -f -
+
           kubectl apply -f k8s/04-monitoring/metrics-server.yml
           kubectl apply -f k8s/04-monitoring/hpa.yml
 
@@ -204,3 +209,20 @@ jobs:
         run: |
           kubectl rollout status deployment/qr-backend -n qr-generator --timeout=120s
           kubectl rollout status deployment/qr-frontend -n qr-generator --timeout=120s
+
+      - name: Get Application URL
+        run: |
+          echo "Waiting for ALB DNS name..."
+          ALB_URL=""
+          for i in {1..20}; do
+            ALB_URL=$(kubectl get ingress qr-ingress -n qr-generator -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' || echo "")
+            if [ -n "$ALB_URL" ]; then break; fi
+            sleep 15
+          done
+
+          if [ -n "$ALB_URL" ]; then
+            echo "URL: http://$ALB_URL"
+          else
+            echo "Timed out waiting for URL"
+            exit 1
+          fi

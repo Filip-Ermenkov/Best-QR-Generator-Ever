@@ -32,3 +32,8 @@ output "aws_region" {
   description = "The AWS region used for the deployment"
   value       = var.aws_region
 }
+
+output "alb_security_group_id" {
+  description = "The ID of the ALB security group to be used in K8s Ingress annotations"
+  value       = aws_security_group.alb.id
+}
