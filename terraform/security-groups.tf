@@ -56,5 +56,6 @@ resource "aws_security_group" "eks_nodes" {
   tags = {
     Name                                        = "${var.project_name}-node-sg"
     "kubernetes.io/cluster/${var.project_name}" = "owned"
+    "elbv2.k8s.aws/resource-query-tag"          = "${var.project_name}"
   }
 }

@@ -3,6 +3,8 @@ kind: Service
 metadata:
   name: qr-frontend
   namespace: qr-generator
+  annotations:
+    alb.ingress.kubernetes.io/target-type: ip
 spec:
   type: NodePort 
   selector:
