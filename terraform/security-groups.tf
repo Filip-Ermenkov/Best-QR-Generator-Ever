@@ -33,10 +33,10 @@ resource "aws_security_group" "eks_nodes" {
   vpc_id      = module.vpc.vpc_id
 
   ingress {
-    description = "Allow cluster control plane to communicate with nodes"
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
+    description     = "Allow cluster control plane to communicate with nodes"
+    from_port       = 0
+    to_port         = 0
+    protocol        = "-1"
     security_groups = [aws_eks_cluster.main.vpc_config[0].cluster_security_group_id]
   }
 
