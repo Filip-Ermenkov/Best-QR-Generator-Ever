@@ -4,26 +4,27 @@
 
 **Deployment Environment:** AWS (EKS)
 
-This repository contains a full-stack, cloud-native QR Code generation platform. It serves as a comprehensive demonstration of modern DevOps engineering—transitioning from manual infrastructure management to a fully automated, scalable, and secure system. By leveraging **Terraform** for infrastructure, **Docker** for containerization, and **Kubernetes** for orchestration, this project achieves a "Zero-Trust" environment with a seamless **GitOps** workflow.
+This repository contains a full-stack, cloud-native QR Code generation platform. It serves as a comprehensive demonstration of modern DevOps engineering - transitioning from manual infrastructure management to a fully automated, scalable, and secure system. By leveraging **Terraform** for infrastructure, **Docker** for containerization, and **Kubernetes** for orchestration, this project achieves a "Zero-Trust" environment with a seamless **GitOps** workflow.
+
+I have updated your Table of Contents to align perfectly with the headers used in the document. I also took the liberty of cleaning up the transition prose between the sections to make it read as a polished, professional `README.md`.
 
 ---
 
 ## Table of Contents
 
-1. [Project Overview](#project-overview)
-2. [Architecture Design](#architecture-design)
-3. [Repository Structure](#repository-structure)
-4. [Infrastructure as Code (Terraform)](#infrastructure-as-code-terraform)
-5. [Kubernetes Orchestration](#kubernetes-orchestration)
-6. [CI/CD Pipeline](#cicd-pipeline)
-7. [Observability & Monitoring](#observability--monitoring)
-8. [Cost Analysis (2026)](#cost-analysis-2026)
+1. [Project Overview](#1-project-overview)
+2. [Architecture Overview](#2-architecture-overview)
+3. [Getting Started](#3-getting-started)
+4. [Infrastructure & Deployment](#4-infrastructure--deployment)
+5. [Project Structure](#5-project-structure)
+6. [Cost Analysis (2026)](#6-cost-analysis-2026)
+7. [Contacts & License](#7-contacts--license)
 
 ---
 
-## Project Overview
+## 1. Project Overview
 
-The **QR Generator Ecosystem** is a cloud-native application designed to demonstrate the full lifecycle of modern DevOps engineering. At its core, the project transforms a simple utility—converting URLs into QR codes—into a highly available, scalable, and secure microservices platform.
+The **QR Generator Ecosystem** is a cloud-native application designed to demonstrate the full lifecycle of modern DevOps engineering. At its core, the project transforms a simple utility - converting URLs into QR codes - into a highly available, scalable, and secure microservices platform.
 
 ### **The Challenge**
 
@@ -44,267 +45,272 @@ In a traditional environment, scaling an image generation service involves manag
 
 ---
 
-## Architecture Design
+## 2. Architecture Overview
 
-The architecture is built on the principle of **separation of concerns**, ensuring networking, compute, and storage layers are decoupled for maximum security.
+This project is built on a highly available, containerized infrastructure managed by **Terraform (IaC)** and orchestrated by **Kubernetes**. The architecture follows AWS best practices for security, scalability, and observability.
 
-### **A. Network Layer (AWS VPC & Security)**
+### Core Infrastructure Components
 
-The foundation is a custom VPC enforcing a strict "Private-First" policy:
+* **Compute (EKS):** A managed **Amazon EKS** cluster serves as the orchestration layer. It uses a managed node group with **t3.medium** instances across multiple Availability Zones for high availability.
+* **Network (VPC):** A custom **VPC** with public/private subnets. Worker nodes reside in private subnets, while the **AWS Load Balancer Controller** manages an internet-facing ALB. A dedicated **S3 Gateway Endpoint** ensures internal traffic to storage stays within the AWS network.
+* **Storage (S3):** An encrypted **S3 Bucket** stores and archives generated QR codes. It includes a lifecycle policy that automatically transitions old files to **Intelligent Tiering** after 30 days and expires them after 90 days.
+* **Container Registry (ECR):** Two private **ECR repositories** (Frontend and Backend) store immutable Docker images, with an automated lifecycle policy to keep only the 5 most recent versions.
 
-* **Public Subnets:** House the **Internet Gateway** and the **Network Load Balancer (NLB)**. This is the only entry point from the public internet.
-* **Private Subnets:** All EKS Worker Nodes reside here with no public IP addresses, protected from direct external access.
-* **Micro-Segmentation:** Worker nodes utilize a "Defense-in-Depth" approach. The Node Security Group restricts traffic to high-order ports (`1025-65535`) exclusively from the Load Balancer.
-* **Connectivity:** A centralized **NAT Gateway** provides secure outbound access, while a **Gateway VPC Endpoint** for S3 keeps storage traffic within the AWS internal network to eliminate data transfer costs.
+### Kubernetes Orchestration
 
-### **B. Compute Layer (Amazon EKS)**
+The application is deployed within the `qr-generator` namespace, utilizing several K8s primitives for stability:
 
-The cluster uses modern EKS features for security and reduced operational overhead:
+* **Workloads:** Both the **FastAPI Backend** and **Next.js Frontend** are deployed as `Deployments` with dual replicas for high availability, utilizing `liveness` and `readiness` probes for self-healing.
+* **Service Discovery:** Internal communication is handled via `ClusterIP` services. The frontend communicates with the backend using the internal DNS: `http://qr-backend.qr-generator.svc.cluster.local:8000`.
+* **Traffic Management:** An **Ingress** resource routes external traffic through the ALB. Pod readiness gates are enabled via namespace labels to ensure zero-downtime deployments during ALB registration.
+* **Configuration:** Environment-specific settings like bucket names and regions are managed via a central `ConfigMap`.
 
-* **Amazon Linux 2023 (AL2023):** Managed Node Groups use the latest AL2023-optimized AMIs for a minimal attack surface.
-* **Access Management API:** Utilizes `authentication_mode = "API"`, replacing legacy `aws-auth` ConfigMaps with auditable IAM identity management.
-* **EKS Pod Identity:** Simplifies how pods assume IAM roles using the **Pod Identity Agent** add-on.
-* **Managed Add-ons & Tooling:**
-    * **AWS Load Balancer Controller:** (Installed via Helm) Authenticated via Pod Identity to dynamically manage NLB.
-    * **Metrics Server:** Deployed to `kube-system` to enable resource-based autoscaling (HPA).
-    * **EBS CSI Driver:** Enables persistent block storage for stateful requirements.
-    * **CloudWatch Observability:** Uses a dedicated IAM role and Pod Identity to stream logs and metrics to CloudWatch.
+### Security & Scaling
 
-
-
-### **C. Storage & Artifact Management**
-
-* **Secure S3 Storage:** * **Encryption:** All objects encrypted at rest via **AES256**.
-    * **Encrypted Transit:** Bucket policy enforces **SSL-only requests** (`aws:SecureTransport: true`).
-    * **Lifecycle Logic:** Objects move to **Intelligent-Tiering** after 30 days and expire after 90 days to optimize costs.
+* **Least Privilege (IAM):** Implements **EKS Pod Identity**. The `backend-service-account` is mapped to a specific IAM role, allowing backend pods to securely access S3 without static credentials.
+* **Auto-Scaling:** **Horizontal Pod Autoscalers (HPA)** are configured for both tiers:
+    * **Backend:** Scales from 2 to 12 replicas based on 70% CPU/Memory utilization.
+    * **Frontend:** Scales from 2 to 4 replicas based on 80% CPU/Memory utilization.
 
 
-* **ECR Artifact Integrity:** * **Vulnerability Scanning:** Images are **scanned on push** for security flaws.
-    * **Tag Immutability:** Prevents overwriting image tags to ensure deployment consistency.
-    * **Cleanup:** Lifecycle policies retain only the last 5 images per repository.
+* **Metrics:** A custom-deployed **Metrics Server** in the `kube-system` namespace provides the necessary resource data for the HPAs to function.
 
+### Observability
 
+* **CloudWatch Observability:** Captures application logs and cluster metrics.
+* **Container Insights:** Integrated to provide deep visibility into pod performance and EKS health.
 
-### **D. Application Logic & Data Flow**
+---
 
-1. **Request:** User submits a URL via the Next.js Frontend.
-2. **API Call:** Frontend sends a request to the FastAPI Backend via the internal Service DNS (`qr-backend.qr-generator.svc.cluster.local`).
-3. **Generation:** Backend generates a QR code and utilizes **EKS Pod Identity** to securely upload the binary to **S3**.
-4. **Presigned URL:** The API generates a temporary, time-limited **Presigned URL**, keeping the S3 bucket private.
-5. **Response:** The Frontend displays the QR code via the secure link, ensuring the storage layer remains hidden.
+## 3. Getting Started
 
-## Repository Structure
+You can run the **Best QR Generator Ever** either using Docker for a seamless experience or manually for development.
 
-The project is organized to maintain a strict separation between infrastructure, application logic, and orchestration manifests. This structure supports a **modular DevOps workflow**, allowing teams to update infrastructure without disrupting application code.
+### Prerequisites
 
-```text
-.
-├── .github/
-│   └── workflows/          # CI/CD pipelines (GitHub Actions)
-├── k8s/                    # Kubernetes Manifests
-│   ├── 00-namespace.yml    # Logical isolation (qr-generator)
-│   ├── 01-rbac.yml         # ServiceAccount for Pod Identity
-│   ├── 02-backend/         # FastAPI Deployment and ClusterIP Service
-│   ├── 03-frontend/        # Next.js Deployment and NLB LoadBalancer Service
-│   ├── 04-monitoring/      # HPA and Metrics Server configurations
-│   └── config-env.yml      # ConfigMap (S3 bucket and Region)
-├── terraform/              # Infrastructure as Code (AWS)
-│   ├── backend.tf          # Remote state (S3/DynamoDB)
-│   ├── cloudwatch.tf       # EKS and App log groups
-│   ├── data.tf             # External policies and certificates
-│   ├── ecr.tf              # Immutable container registries
-│   ├── eks.tf              # Cluster, Node Groups, and Add-ons
-│   ├── helm.tf             # NLB Controller via Helm
-│   ├── iam.tf              # Pod Identity and GitHub OIDC roles
-│   ├── outputs.tf          # Critical resource identifiers
-│   ├── provider.tf         # AWS, Helm, and Kubernetes providers
-│   ├── s3.tf               # Secure storage for QR codes
-│   ├── security-groups.tf  # Firewalls and micro-segmentation
-│   ├── variables.tf        # Parameterized inputs
-│   └── vpc.tf              # Networking (Subnets, NAT, S3 Endpoint)
-├── frontend/               # Next.js (Standalone mode)
-└── backend/                # FastAPI (QR Generation logic)
-└── README.md               # Documentation and Architectural Guide
+* **Docker & Docker Compose** (Recommended)
+* **AWS Account:** An S3 bucket is required to store the generated images.
+* **IAM Credentials:** Access key and Secret key with S3 permissions (for local use).
 
+### Environment Configuration
+
+Create a `.env` file in the root directory to configure both the backend and frontend:
+
+```env
+# AWS Configuration
+AWS_ACCESS_KEY_ID=your_access_key
+AWS_SECRET_ACCESS_KEY=your_secret_key
+AWS_REGION=us-east-1
+S3_BUCKET_NAME=best-qr-ever-generated-codes
+
+# Frontend Configuration
+NEXT_PUBLIC_API_URL=http://localhost:8000
 ```
 
-### **Core Directory Highlights**
+---
 
-* **`terraform/`**: Defines the foundational cloud environment. It automates the creation of the VPC, the EKS cluster with AL2023 nodes, and the necessary IAM roles for **EKS Pod Identity**.
-* **`k8s/`**: Orchestrates the application using a numerical sequence. The **Frontend Service** is configured as a `LoadBalancer` type, using AWS-specific annotations to provision an **Internet-facing NLB**. The **Monitoring** folder includes a full `metrics-server` deployment to support the defined `HorizontalPodAutoscaler` resources.
-* **`backend/` and `frontend/**`: The backend utilizes the `backend-service-account` to assume IAM permissions for S3, while the frontend is configured to point to the backend's internal ClusterIP DNS: `http://qr-backend.qr-generator.svc.cluster.local:8000`.
+### Option A: Running with Docker (Quick Start)
+
+The project includes a `docker-compose.yml` that handles the networking, health checks, and build arguments automatically.
+
+1. **Spin up the services:**
+    ```bash
+    docker-compose up --build
+    ```
+
+
+2. **Access the application:**
+    * **Frontend:** [http://localhost:3000](https://www.google.com/search?q=http://localhost:3000)
+    * **Backend API:** [http://localhost:8000](https://www.google.com/search?q=http://localhost:8000)
+    * **API Health Check:** [http://localhost:8000/health](https://www.google.com/search?q=http://localhost:8000/health)
+
+
+
+    > **Note:** The frontend container will wait for the backend to be `healthy` (passing its internal health check) before starting.
 
 ---
 
-## Infrastructure as Code (Terraform)
+### Option B: Manual Development Setup
 
-The infrastructure is managed entirely through Terraform, following a **modular and stateful approach**. By codifying the AWS environment, we ensure that the platform is reproducible, auditable, and protected against configuration drift.
+If you prefer to run the services without Docker for active debugging:
 
-### **A. Backend & State Management**
+#### 1. Backend (FastAPI)
 
-To support team collaboration and prevent concurrent modifications, the project utilizes a **Remote Backend** (defined in `backend.tf`):
+1. Navigate to the folder: `cd backend`
 
-* **S3 Bucket:** `best-qr-ever-terraform-state` stores the `terraform.tfstate` file as the single source of truth.
-* **DynamoDB Table:** `terraform-state-lock` implements **State Locking**, preventing race conditions during concurrent `terraform apply` runs.
-* **Encryption:** The state file is secured with **AES256** server-side encryption.
+2. Create and activate a virtual environment:
+    ```bash
+    python -m venv venv
+    source venv/bin/activate  # On Windows: venv\Scripts\activate
+    ```
 
-### **B. Provisioning Logic**
 
-The `terraform/` directory is modularized to maintain clarity and separation of concerns:
+3. Install dependencies: `pip install -r requirements.txt`
 
-| File | Responsibility | Key Features |
-| --- | --- | --- |
-| `vpc.tf` | **Networking** | 2-AZ VPC with NAT Gateway and an **S3 Gateway Endpoint** to eliminate data transfer costs. |
-| `eks.tf` | **Compute** | Managed Cluster using **AL2023** nodes, **EBS CSI Driver**, and the **Access Management API**. |
-| `iam.tf` | **Identity** | Configures **EKS Pod Identity** associations for S3 access, LB controller, and Observability. |
-| `ecr.tf` | **Registry** | Dual repositories with **AES256 encryption**, **Scan-on-Push**, and **Tag Immutability**. |
-| `s3.tf` | **Storage** | Private bucket with **SSL-only enforcement**, Versioning, and **Intelligent-Tiering**. |
-| `helm.tf` | **Add-ons** | Deploys the **AWS Load Balancer Controller** via Helm, integrated with Pod Identity. |
+4. Run the server:
+    ```bash
+    uvicorn main:app --reload --port 8000
+    ```
 
-### **C. Security & Networking Blueprint**
 
-The infrastructure adheres to the **Principle of Least Privilege (PoLP)**:
 
-* **Zero-Trust Identity:** Traditional IAM users are replaced by **OIDC-federated roles** for GitHub Actions and **EKS Pod Identity** for granular pod-level permissions.
-* **Micro-Segmentation:** `security-groups.tf` restricts worker node ingress to high-order ports (`1025-65535`) exclusively from the load balancer tier.
-* **Encrypted Transit:** The S3 bucket policy (defined in `s3.tf`) explicitly denies any non-HTTPS traffic using the `aws:SecureTransport` condition.
+#### 2. Frontend (Next.js)
 
-### **D. Idempotency & Validation**
+1. Navigate to the folder: `cd frontend`
 
-The configuration is designed to be **idempotent**, ensuring consistent state across environments:
+2. Install dependencies: `npm install`
 
-* **Variable Validation:** `variables.tf` enforces a regex constraint on `project_name` to ensure only lowercase letters, numbers, and hyphens are used.
-* **Automated Cleanup:** ECR lifecycle policies retain only the **last 5 images**, and S3 lifecycle rules expire objects after 90 days to control long-term costs.
+3. Run the development server:
+    ```bash
+    npm run dev
+    ```
 
 ---
 
-## **Kubernetes Orchestration**
+## 4. Infrastructure & Deployment
 
-The application is deployed on **Amazon EKS (v1.31)** using a declarative microservices architecture. The orchestration layer ensures the QR Generator is highly available and scales dynamically based on real-time demand.
+This project features a fully automated **GitOps-style CI/CD pipeline**. The infrastructure and application lifecycle are managed through GitHub Actions, allowing for a "one-click" deployment or destruction of the entire AWS environment.
 
-### **A. Workload Architecture**
+### Automated CI/CD Workflow
 
-The system is organized within the `qr-generator` namespace, separating concerns into two core deployments:
+The pipeline, defined in `.github/workflows/application-cicd.yml`, is triggered on any push to the `main` branch or via manual dispatch.
 
-* **Frontend (NextJS):** Manages the user interface with a replica min count of 2. It communicates with the backend via internal cluster DNS.
-* **Backend (FastAPI):** Processes QR generation logic. It uses a dedicated **ServiceAccount** (`backend-service-account`) coupled with **EKS Pod Identity** to securely access S3 buckets without managing long-lived AWS credentials.
+1. **Infrastructure Phase (Terraform):**
+    * **Validation:** Runs `fmt` and `validate` to ensure IaC quality.
+    * **Provisioning:** Provisions the VPC, EKS Cluster, ECR Repositories, and S3 Buckets.
+    * **OIDC Security:** Uses AWS Federation (OIDC) to assume IAM roles without storing long-lived secrets in GitHub.
 
-### **B. Networking & Traffic Flow**
 
-* **External Access (NLB):** The frontend is exposed to the internet via an **AWS Network Load Balancer (NLB)**, configured through the AWS Load Balancer Controller. This provides a high-performance entry point at Layer 4.
-* **Service Discovery:** Internal communication is handled by `ClusterIP` services. The frontend reaches the backend using the internal URI: `http://qr-backend.qr-generator.svc.cluster.local:8000`.
-* **Health Monitoring:** Both services implement `liveness` and `readiness` probes. The backend specifically monitors a `/health` endpoint to ensure the API is fully initialized before receiving traffic.
-
-### **C. Scaling & Resource Governance**
-
-To maintain stability and cost-efficiency, the cluster utilizes:
-
-* **Horizontal Pod Autoscaler (HPA):** Both tiers scale automatically. The backend is configured to scale up to **12 replicas** if CPU or Memory utilization exceeds **70%**, ensuring responsiveness during peak generation requests.
-* **Resource Constraints:** Every container specifies exact **CPU/Memory requests and limits** (e.g., 250m CPU request / 500m limit). This allows the Kubernetes scheduler to place pods intelligently and prevents any single container from exhausting node resources.
-
-### **D. Configuration Management**
-
-* **Environment Decoupling:** Global settings like `S3_BUCKET_NAME` and `AWS_REGION` are managed via a centralized **ConfigMap** (`qr-config`). This allows for configuration changes without rebuilding container images.
-
----
-
-## **CI/CD Pipeline**
-
-The application employs a unified **GitHub Actions** workflow (`application-cicd.yml`) to manage the complete lifecycle of both infrastructure and application code. The pipeline is designed around the "Build Once, Deploy Anywhere" principle, using the Git SHA as a unique immutable identifier for container images.
-
-### **A. Workflow Architecture**
-
-The pipeline is split into two primary jobs, ensuring that infrastructure requirements are satisfied before any application code is deployed.
-
-| Job | Responsibility | Triggers |
-| --- | --- | --- |
-| **Infrastructure** | Manages EKS, ECR, and IAM via Terraform. Handles `plan` on PRs and `apply` on merges. | Pushes to `main`, PRs, or Manual Dispatch. |
-| **App Deployment** | Builds Docker images, pushes to ECR, and updates K8s manifests. | Successful completion or skipped status of Infrastructure job. |
-
-### **B. Infrastructure Lifecycle (Terraform Job)**
-
-This job automates the management of AWS resources within the `terraform/` directory:
-
-* **Validation & Security:** Every push triggers `terraform fmt` and `terraform validate`. It uses **OIDC-based authentication** to assume the `GitHub_Actions_Resources_Deployment` role, eliminating the need for static AWS keys.
-* **Plan Transparency:** On Pull Requests, the plan output is automatically commented back to the PR using `actions/github-script`, allowing for immediate peer review of infrastructure changes.
-* **Controlled Destruction:** A manual `workflow_dispatch` trigger allows for an environment teardown. It includes a **Pre-Destroy Cleanup** step that manually deletes the Kubernetes namespace to ensure AWS Load Balancers and Network Interfaces are drained before Terraform attempts to destroy the VPC and Cluster.
-
-### **C. Application Delivery (Deploy Job)**
-
-This job handles the containerization and orchestration, running only if a `destroy` action was not requested:
-
-* **Optimized Docker Builds:** Builds and pushes images for the `frontend` and `backend` to Amazon ECR. The frontend build specifically injects the internal API URL (`http://qr-backend...`) as a **Build Argument** to bake the service endpoint into the NextJS static assets.
-* **Dynamic Manifest Templating:** Uses `envsubst` to inject the unique `${BACKEND_IMAGE}` and `${FRONTEND_IMAGE}` (tagged with the Git SHA) into the Kubernetes deployment files on the fly.
-* **Ordered Deployment & Verification:** Applies manifests in a specific dependency order (Namespace -> ConfigMap -> RBAC -> Workloads -> HPA). The pipeline concludes with a `kubectl rollout status` check, which will fail the build if the new pods do not reach a "Healthy" state within 120 seconds.
-
----
-
-## **Observability & Monitoring**
-
-The project implements a cloud-native observability stack that leverages native AWS integrations and Kubernetes standards to ensure high availability and deep performance insights.
-
-### **A. Real-Time Resource Metrics & Scaling**
-
-While the infrastructure provides the foundation, the cluster uses real-time signals to maintain application performance:
-
-* **Metrics Server:** Deployed via the `k8s/04-monitoring/metrics-server.yml` manifest. It aggregates CPU and memory data from nodes and pods, exposing the `metrics.k8s.io` API. This enables the use of `kubectl top` for live performance auditing.
-* **Dual Horizontal Pod Autoscalers (HPA):** As defined in `hpa.yml`, the cluster manages two distinct scaling policies:
-    * **Backend:** Scales between **2 and 12 replicas** targeting **70%** CPU/Memory utilization.
-    * **Frontend:** Scales between **2 and 4 replicas** targeting **80%** CPU/Memory utilization.
+2. **Application Phase (Docker & K8s):**
+    * **Build:** Packages the FastAPI and Next.js applications into Docker images.
+    * **Registry:** Pushes versioned images (tagged with Git SHA) to Amazon ECR.
+    * **Orchestration:** Updates the EKS cluster by applying Kubernetes manifests using `envsubst` to inject the latest image tags and security group IDs dynamically.
 
 
 
-### **B. CloudWatch Observability Integration**
+### Manual Deployment / Destruction
 
-The infrastructure uses the **Amazon CloudWatch Observability EKS Add-on** (managed in `eks.tf`) to bridge the gap between cluster events and AWS monitoring tools.
+The workflow supports `workflow_dispatch`, enabling manual control through the GitHub Actions UI:
 
-| Feature | Resource / Detail | Purpose |
-| --- | --- | --- |
-| **Control Plane Logs** | `enabled_cluster_log_types` in `eks.tf` | Captures API, Audit, and Scheduler logs in the `/aws/eks/.../cluster` group. |
-| **Application Logs** | `aws_cloudwatch_log_group.app_logs` | Aggregates all logs from the `qr-generator` namespace for long-term analysis. |
-| **Container Insights** | Managed via EKS Add-on | Provides automated dashboards for Pod-level CPU, Memory, and Network I/O. |
-| **Pod Identity** | `cloudwatch-obs` association | Grants the `CloudWatchAgentServerPolicy` to the agent using the modern Pod Identity agent. |
+* **Deploy:** Select the **apply** action to provision the environment and deploy the app.
+* **Teardown:** Select the **destroy** action to wipe the environment. The pipeline includes a specialized **Kubernetes Cleanup** step that deletes the `qr-generator` namespace and waits for AWS Load Balancers to drain before Terraform attempts to destroy the VPC, preventing dependency conflicts.
 
-### **C. Health Checks & Self-Healing**
+### Deployment Commands (CLI)
 
-The system is configured to detect and recover from failures automatically using probes defined in the deployment manifests:
+If you wish to run the deployment steps manually from your terminal:
 
-* **Backend Probes:** Uses the `/health` endpoint on port 8000 with a 15s initial delay to ensure the API is fully booted before accepting traffic.
-* **Frontend Probes:** Monitors the root path `/` on port 3000 to ensure the web server is responsive.
-* **Efficient Log Retention:** To manage costs while maintaining visibility, both cluster and application log groups are configured with a **7-day retention policy** (defined in `cloudwatch.tf`).
-* **EKS Health Monitoring:** CloudWatch monitors the EKS control plane and node group status, providing a historical record of cluster availability and resource saturation.
+#### 1. Infrastructure
+
+```bash
+cd terraform
+terraform init
+terraform apply -auto-approve
+```
+
+#### 2. Kubernetes Application
+
+After infrastructure is ready, update your local `kubeconfig`:
+
+```bash
+aws eks update-kubeconfig --region us-east-1 --name best-qr-ever
+```
+
+Then apply the manifests in order:
+
+```bash
+kubectl apply -f k8s/00-namespace.yml
+kubectl apply -f k8s/config-env.yml
+# ... apply remaining k8s/ directories
+```
+
+### Scaling & Monitoring
+
+Once deployed, the cluster automatically manages health and scale:
+
+* **Self-Healing:** Kubernetes `liveness` and `readiness` probes monitor container health.
+* **Auto-Scaling:** The **Metrics Server** feeds data to the **HPA**, which will scale the backend up to 12 replicas during traffic spikes.
+* **Ingress:** The **AWS Load Balancer Controller** automatically provisions a physical ALB and provides a DNS name to access the frontend.
 
 ---
 
-## **Cost Analysis (2026)**
+## 5. Project Structure
 
-This section provides a projected monthly budget for the platform based on **2026 AWS Pricing** in the `us-east-1` region. The analysis assumes a steady-state production environment using the resources defined in the provided Terraform configuration.
+The project is organized into a modular architecture that separates infrastructure, orchestration, and application logic. Below is a detailed map of the repository:
 
-### **A. Monthly Infrastructure Breakdown**
+### Backend (`/backend`)
 
-| Service Component | Estimated Usage | Monthly Cost (USD) |
-| --- | --- | --- |
-| **EKS Control Plane** | 1 Cluster (Standard Support) | **$73.00** |
-| **EC2 Worker Nodes** | 2x `t3.medium` (Defined in `eks.tf`) | **$61.00** |
-| **NAT Gateway** | 1 Gateway (Defined in `vpc.tf`) | **$32.85** |
-| **Public IPv4 Addresses** | 2 IPs (NAT Gateway + ALB) | **$7.30** |
-| **Application Load Balancer** | 1 ALB (via Helm Controller) + LCU | **$22.50** |
-| **S3 & ECR Storage** | 100GB S3 + 5GB ECR (7-day retention) | **$4.00** |
-| **CloudWatch Logs** | Ingestion + 7-day retention (`cloudwatch.tf`) | **$6.50** |
-| **Total Estimated Monthly Cost** | — | **~$207.15** |
+* **`main.py`**: The FastAPI application core. Handles QR generation logic, S3 client initialization, and AWS Pod Identity/IAM credential switching.
+* **`requirements.txt`**: Lists Python dependencies (`fastapi`, `boto3`, `qrcode`, etc.).
+* **`Dockerfile`**: Defines the Python environment and build steps for the API.
+* **`.dockerignore`**: Optimizes the Docker build by excluding local virtual environments and logs.
+
+### Frontend (`/frontend`)
+
+* **`app/`**: Contains the Next.js App Router files (`page.tsx` for UI, `layout.tsx` for structure, and `globals.css` for styling).
+* **`next.config.ts` & `tsconfig.json`**: Configuration files for Next.js features and TypeScript compiler settings.
+* **`package.json`**: Defines Node.js dependencies and scripts (`dev`, `build`, `start`).
+* **`Dockerfile`**: A multi-stage build file that compiles the Next.js production bundle.
+
+### Terraform (`/terraform`)
+
+* **`vpc.tf` & `security-groups.tf`**: Provisions the network foundation (Public/Private subnets, NAT Gateways) and firewall rules.
+* **`eks.tf` & `ecr.tf`**: Manages the EKS Cluster, Node Groups, and the private container registries for image storage.
+* **`iam.tf`**: Configures OIDC for GitHub Actions and EKS Pod Identity roles for S3 access.
+* **`s3.tf`**: Defines the encrypted bucket and lifecycle policies for QR code storage.
+* **`helm.tf`**: Deploys Kubernetes-native drivers (like the AWS Load Balancer Controller) via Helm providers.
+* **`backend.tf`**: Configures the S3/DynamoDB remote state storage to prevent state corruption.
+* **`provider.tf`, `variables.tf`, `outputs.tf`, `data.tf`**: Core Terraform configuration, input definitions, and cross-resource data fetching.
+* **`cloudwatch.tf`**: Sets up log groups for cluster and application monitoring.
+
+### Kubernetes (`/k8s`)
+
+* **`00-namespace.yml`**: Creates the `qr-generator` isolated environment with pod-readiness gates for the ALB.
+* **`01-rbac.yml` & `config-env.yml`**: Defines ServiceAccounts for Pod Identity and a ConfigMap for application environment variables.
+* **`02-backend/`**: Deployment and ClusterIP Service manifests for the API.
+* **`03-frontend/`**: Deployment, NodePort Service, and the Ingress resource that triggers the AWS ALB creation.
+* **`04-monitoring/`**: Contains the Metrics Server deployment and Horizontal Pod Autoscaler (HPA) rules for dynamic scaling.
+
+### GitHub Workflows (`/.github/workflows`)
+
+* **`application-cicd.yml`**: The "brain" of the project's automation. It manages the two-phase lifecycle of Infrastructure (Terraform) and Application (Docker/Kubernetes) deployment.
 
 ---
 
-### **B. Key Cost Drivers & Assumptions**
+To provide a precise **Cost Analysis (2026)**, I have nearly everything I need from your Terraform files, but two small details would make the numbers perfect:
 
-1. **The "Control Plane" Tax:** Amazon EKS carries a fixed cost of **$0.10/hour**. This is unavoidable for managed Kubernetes and represents the largest single cost for a small-scale cluster.
-2. **Managed NAT Gateways:** To allow nodes in private subnets to pull images and updates, one NAT Gateway is provisioned in `vpc.tf`. This incurs a flat hourly rate plus data processing fees.
-3. **Public IPv4 Pricing:** As of 2024, AWS charges **$0.005/hour** for every public IPv4 address. The architecture uses two: one for the NAT Gateway and one for the internet-facing Load Balancer.
-4. **Intelligent Storage:** By using `INTELLIGENT_TIERING` in `s3.tf`, the system automatically moves older QR codes to cheaper storage tiers after 30 days of inactivity, preventing cost bloat as the database grows.
+1. **Expected Traffic/Usage:** How many QR codes do you expect to generate per month? (This affects S3 request costs and Data Transfer out).
+2. **NAT Gateway Usage:** Does your Terraform code provision a NAT Gateway for the private subnets? (This is often the most expensive "hidden" cost for small EKS clusters).
+
+Based on your current architecture (**EKS with t3.medium nodes**, **ALB**, **S3**, and **ECR**), here is a projected monthly cost analysis for 2026 in the `us-east-1` region.
 
 ---
 
-## Contacts & license
+## 6. Cost Analysis (2026)
 
-**Owner:** Filip Ermenkov — [f.ermenkov@gmail.com](mailto:f.ermenkov@gmail.com)\
+The following table breaks down the estimated monthly operating costs for the production environment. This analysis assumes a standard "High Availability" configuration as defined in the Terraform files.
+
+| Service | Component | Configuration Details | Est. Monthly Cost (USD) |
+| --- | --- | --- | --- |
+| **Amazon EKS** | Cluster Management | Standard EKS Control Plane fee | $73.00 |
+| **Amazon EC2** | Worker Nodes | 2 x t3.medium Instances (On-Demand) | $60.74 |
+| **Elastic Load Balancing** | Application Load Balancer | 1 ALB + 2 LCU (Avg. traffic) | $22.26 |
+| **Amazon S3** | Storage & Requests | 50GB Storage + Standard API Requests | $2.50 |
+| **Amazon ECR** | Image Storage | 2 Repositories (Retention: 5 versions) | $0.50 |
+| **Networking** | NAT Gateway | 1 NAT Gateway (Idle + Data Processed) | $32.85 |
+| **CloudWatch** | Observability | Logs, Metrics, and Alarms | $5.00 |
+| **TOTAL** |  | **Estimated Monthly Total** | **~$196.85** |
+
+### Cost Optimization Strategies
+
+To reduce these costs for smaller projects, the following adjustments can be made:
+
+* **Savings Plans:** Committing to 1-year compute usage can reduce EC2 costs by up to **30%**.
+* **S3 Intelligent Tiering:** Already implemented in the code, this ensures that older QR codes automatically move to cheaper storage tiers.
+* **Spot Instances:** Switching the EKS Managed Node Group to use **Spot Instances** for the worker nodes can reduce the EC2 portion of the bill by up to **70%**.
+
+---
+
+## 7. Contacts & license
+
+**Owner:** Filip Ermenkov  -  [f.ermenkov@gmail.com](mailto:f.ermenkov@gmail.com)\
 **License:** This project is licensed under the [MIT License](LICENSE)
