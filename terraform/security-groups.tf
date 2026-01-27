@@ -66,3 +66,12 @@ resource "aws_security_group" "eks_nodes" {
     "kubernetes.io/cluster/${var.project_name}" = "owned"
   }
 }
+
+resource "aws_security_group_rule" "cluster_ingress_node_https" {
+  type                     = "ingress"
+  from_port                = 443
+  to_port                  = 443
+  protocol                 = "tcp"
+  security_group_id        = aws_eks_cluster.main.vpc_config[0].cluster_security_group_id
+  source_security_group_id = aws_security_group.eks_nodes.id
+}
