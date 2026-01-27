@@ -22,4 +22,4 @@ spec:
               service:
                 name: qr-frontend
                 port:
-                  number: 3000
+                  number: 80

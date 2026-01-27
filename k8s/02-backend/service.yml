@@ -3,6 +3,8 @@ kind: Service
 metadata:
   name: qr-backend
   namespace: qr-generator
+  annotations:
+    alb.ingress.kubernetes.io/target-type: ip
 spec:
   selector:
     app: qr-backend
