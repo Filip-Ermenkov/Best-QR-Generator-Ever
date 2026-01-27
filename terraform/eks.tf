@@ -21,14 +21,48 @@ resource "aws_eks_cluster" "main" {
   ]
 }
 
+resource "aws_launch_template" "eks_nodes" {
+  name_prefix = "${var.project_name}-node-"
+
+  vpc_security_group_ids = [aws_security_group.eks_nodes.id]
+
+  metadata_options {
+    http_endpoint               = "enabled"
+    http_tokens                 = "required" 
+    http_put_response_hop_limit = 2
+  }
+
+  block_device_mappings {
+    device_name = "/dev/xvda"
+    ebs {
+      volume_size           = 20
+      volume_type           = "gp3"
+      encrypted             = true
+      delete_on_termination = true
+    }
+  }
+
+  tag_specifications {
+    resource_type = "instance"
+    tags = {
+      Name = "${var.project_name}-worker-node"
+    }
+  }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
 resource "aws_eks_node_group" "main" {
   cluster_name    = aws_eks_cluster.main.name
   node_group_name = "${var.project_name}-node-group"
   node_role_arn   = aws_iam_role.eks_nodes.arn
   subnet_ids      = module.vpc.private_subnets
 
-  remote_access {
-    source_security_group_ids = [aws_security_group.eks_nodes.id]
+  launch_template {
+    name    = aws_launch_template.eks_nodes.name
+    version = aws_launch_template.eks_nodes.latest_version
   }
 
   scaling_config {
