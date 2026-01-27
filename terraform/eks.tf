@@ -28,7 +28,6 @@ resource "aws_eks_node_group" "main" {
   subnet_ids      = module.vpc.private_subnets
 
   remote_access {
-    ec2_ssh_key               = null
     source_security_group_ids = [aws_security_group.eks_nodes.id]
   }
 
